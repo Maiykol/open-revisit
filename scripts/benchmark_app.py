@@ -25,6 +25,13 @@ def main() -> None:
     print(f"cold_full_render_seconds={cold_seconds:.6f}")
     print(f"warm_full_render_seconds={warm_seconds:.6f}")
 
+    started = perf_counter()
+    app.toggle(key="sensitivity_enabled").set_value(True).run(timeout=60)
+    sensitivity_seconds = perf_counter() - started
+    if app.exception:
+        raise RuntimeError(f"sensitivity render failed: {app.exception}")
+    print(f"sensitivity_full_render_seconds={sensitivity_seconds:.6f}")
+
 
 if __name__ == "__main__":
     main()

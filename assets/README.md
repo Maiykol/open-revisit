@@ -3,6 +3,8 @@
 `natural_earth_europe.geojson` is a clipped and simplified WGS84 extract of
 Natural Earth’s 1:110 million Admin 0 countries layer. It is used only as
 offline geographic context for the Europe figure; no live basemap is fetched.
+The Streamlit app renders the same file inline through Vega-Lite; no tile or
+web service is contacted.
 
 Source: [Natural Earth 1:110m cultural vectors](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/).
 Natural Earth vector data is [public domain](https://www.naturalearthdata.com/about/terms-of-use/).

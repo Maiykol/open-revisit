@@ -182,10 +182,19 @@ Parquet with:
 make app
 ```
 
-The app provides AOI, period, clear-fraction, and service-interval controls over
-the existing tabular data. It derives threshold-dependent usability in memory
-and does not run discovery, read rasters, use the network, or modify pipeline
-outputs. Set `OPEN_REVISIT_CONFIG` to use another repository-style YAML config.
+The app is organized into three tabs. *Overview* shows the AOI summary table,
+an offline selected-city map (colour by P(within 7 days), SLA success, usable
+rate, or longest outage) over the committed Natural Earth outline, and a
+nominal-versus-effective median-gap dumbbell. *Reliability* shows the survival
+curve, the SLA curve for every W from 1 through the horizon, the monthly
+heatmap, and a seasonal monthly comparison. *Diagnostics* shows an on-demand
+`min_clear` sensitivity analysis, a datatake-level observation timeline with
+long-outage bands, and a catalog-versus-AOI quality scatter with a configurable
+catalog threshold. Every number comes from `src/open_revisit/metrics.py`; the
+app derives threshold-dependent usability in memory and does not run discovery,
+read rasters, use the network, or modify pipeline outputs. Set
+`OPEN_REVISIT_CONFIG` to use another repository-style YAML config and
+`OPEN_REVISIT_BASEMAP` to point at another local GeoJSON outline.
 
 Run the offline quality gate with:
 
