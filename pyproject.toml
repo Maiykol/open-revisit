@@ -33,9 +33,12 @@ open-revisit = "open_revisit.cli:app"
 [dependency-groups]
 dev = [
   "mypy==1.17.1",
+  "pandas-stubs==3.0.5.260730",
+  "pyarrow-stubs==20.0.0.20260819",
   "pytest==8.4.1",
   "ruff==0.12.10",
   "types-pyyaml==6.0.12.20250516",
+  "types-shapely==2.1.0.20260728",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -57,3 +60,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 python_version = "3.12"
 strict = true
 files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["geopandas", "geopandas.*"]
+ignore_missing_imports = true
