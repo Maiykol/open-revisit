@@ -1,4 +1,4 @@
-.PHONY: sync check lint typecheck test test-network dbt
+.PHONY: sync check lint typecheck test test-network dbt app benchmark-app
 
 sync:
 	uv sync --frozen
@@ -20,3 +20,9 @@ test-network:
 
 dbt:
 	uv run python -m open_revisit.dbt_runner --config config/dev.yaml
+
+app:
+	uv run streamlit run app/streamlit_app.py
+
+benchmark-app:
+	uv run python scripts/benchmark_app.py

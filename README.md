@@ -175,6 +175,18 @@ unchanged input and configuration.
 
 ## Development
 
+Launch the read-only self-service app against the configured local observation
+Parquet with:
+
+```console
+make app
+```
+
+The app provides AOI, period, clear-fraction, and service-interval controls over
+the existing tabular data. It derives threshold-dependent usability in memory
+and does not run discovery, read rasters, use the network, or modify pipeline
+outputs. Set `OPEN_REVISIT_CONFIG` to use another repository-style YAML config.
+
 Run the offline quality gate with:
 
 ```console

@@ -16,6 +16,10 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+/.streamlit/
+/app/.streamlit/
+/app/screenshots/
+/screenshots/
 
 # dbt local state and databases. The credential-free dbt/profiles.yml is tracked.
 /.dbt/
