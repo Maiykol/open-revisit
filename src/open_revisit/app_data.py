@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -29,6 +31,7 @@ OBSERVATION_COLUMNS = [
     "usable",
     "complete",
 ]
+AOI_COLUMNS = ["aoi_id", "name", "country", "lat", "lon"]
 
 
 class AppDataError(ValueError):
@@ -46,19 +49,91 @@ class AppMetricTables:
     summary: pd.DataFrame
 
 
-def source_signature(path: Path) -> tuple[int, int]:
-    """Return a cache signature from a Parquet file's size and modification time."""
+def file_signature(path: Path, *, description: str, hint: str) -> tuple[int, int]:
+    """Return a (size, mtime_ns) cache signature or raise a helpful setup error."""
     try:
         stat = path.stat()
     except FileNotFoundError as exc:
-        raise AppDataError(
-            f"Observation data is not available at {path}. "
+        raise AppDataError(f"{description} is not available at {path}. {hint}") from exc
+    if not path.is_file():
+        raise AppDataError(f"{description} path is not a file: {path}")
+    return stat.st_size, stat.st_mtime_ns
+
+
+def source_signature(path: Path) -> tuple[int, int]:
+    """Return a cache signature from the observation Parquet's size and mtime."""
+    return file_signature(
+        path,
+        description="Observation data",
+        hint=(
             "Place the pipeline's observations.parquet in the configured "
             "data directory."
-        ) from exc
-    if not path.is_file():
-        raise AppDataError(f"Observation data path is not a file: {path}")
-    return stat.st_size, stat.st_mtime_ns
+        ),
+    )
+
+
+def aoi_signature(path: Path) -> tuple[int, int]:
+    """Return a cache signature from the AOI Parquet's size and mtime."""
+    return file_signature(
+        path,
+        description="AOI metadata",
+        hint=(
+            "Place the pipeline's aois.parquet in the configured data directory "
+            "(open-revisit aois build)."
+        ),
+    )
+
+
+def basemap_signature(path: Path) -> tuple[int, int]:
+    """Return a cache signature from the offline GeoJSON's size and mtime."""
+    return file_signature(
+        path,
+        description="Offline basemap",
+        hint=(
+            "Use the committed assets/natural_earth_europe.geojson or point "
+            "OPEN_REVISIT_BASEMAP at a local GeoJSON FeatureCollection."
+        ),
+    )
+
+
+def load_aois(path: Path) -> pd.DataFrame:
+    """Load AOI centroid metadata (WGS84 degrees) without decoding geometry."""
+    aoi_signature(path)
+    try:
+        aois = pd.read_parquet(path, columns=AOI_COLUMNS)
+    except Exception as exc:
+        raise AppDataError(f"Could not read AOI metadata at {path}: {exc}") from exc
+    aois = aois.copy()
+    aois["aoi_id"] = aois["aoi_id"].astype(str)
+    if aois["aoi_id"].duplicated().any():
+        raise AppDataError("AOI metadata contains duplicate aoi_id values.")
+    lat = pd.to_numeric(aois["lat"], errors="coerce")
+    lon = pd.to_numeric(aois["lon"], errors="coerce")
+    if not (lat.between(-90.0, 90.0).all() and lon.between(-180.0, 180.0).all()):
+        raise AppDataError("AOI metadata contains invalid lat/lon values.")
+    aois["lat"] = lat.astype(float)
+    aois["lon"] = lon.astype(float)
+    return aois.sort_values("aoi_id", kind="stable").reset_index(drop=True)
+
+
+def load_basemap(path: Path) -> dict[str, Any]:
+    """Load a local GeoJSON FeatureCollection. No URL or network is ever used."""
+    basemap_signature(path)
+    try:
+        raw: Any = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise AppDataError(f"Could not read offline basemap at {path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise AppDataError(
+            f"Offline basemap at {path} is not a GeoJSON FeatureCollection."
+        )
+    if raw.get("type") != "FeatureCollection" or not isinstance(
+        raw.get("features"), list
+    ):
+        raise AppDataError(
+            f"Offline basemap at {path} is not a GeoJSON FeatureCollection."
+        )
+    return raw
 
 
 def load_observations(path: Path, *, config_hash: str) -> pd.DataFrame:
@@ -88,7 +163,7 @@ def load_observations(path: Path, *, config_hash: str) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def _validate_selection(
+def validate_selection(
     observations: pd.DataFrame,
     *,
     aoi_ids: tuple[str, ...],
@@ -168,7 +243,7 @@ def build_app_metrics(
     every_days: int,
 ) -> AppMetricTables:
     """Build app metrics by orchestrating the metric-contract functions in memory."""
-    _validate_selection(
+    validate_selection(
         observations,
         aoi_ids=aoi_ids,
         start=start,

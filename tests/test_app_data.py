@@ -10,11 +10,14 @@ import pytest
 from open_revisit.app_data import (
     AppDataError,
     build_app_metrics,
+    load_aois,
+    load_basemap,
     load_observations,
     select_observations,
 )
 
 CONFIG_HASH = "test-config"
+REPO_BASEMAP = Path("assets/natural_earth_europe.geojson")
 
 
 def _row(
@@ -70,6 +73,33 @@ def _observations() -> pd.DataFrame:
             _row("alpha", "outside-after", "2024-04-01T00:00:00Z", clear=1.0),
             _row("beta", "b1", "2024-01-03T05:30:00Z", clear=0.70),
             _row("beta", "b2", "2024-02-02T17:45:00Z", clear=0.82),
+        ]
+    )
+
+
+def _aois() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "aoi_id": "beta",
+                "name": "Beta",
+                "country": "BB",
+                "lat": 60.5,
+                "lon": 10.25,
+                "utm_epsg": 32632,
+                "area_km2": 400.0,
+                "geometry": b"\x00",
+            },
+            {
+                "aoi_id": "alpha",
+                "name": "Alpha",
+                "country": "AA",
+                "lat": 52.5,
+                "lon": 13.4,
+                "utm_epsg": 32633,
+                "area_km2": 400.0,
+                "geometry": b"\x00",
+            },
         ]
     )
 
@@ -240,3 +270,45 @@ def test_invalid_period_and_empty_selection_are_rejected() -> None:
             start=date(2024, 1, 1),
             end=date(2024, 1, 10),
         )
+
+
+def test_load_aois_reads_centroids_sorted_and_validates(tmp_path: Path) -> None:
+    path = tmp_path / "aois.parquet"
+    _aois().to_parquet(path, index=False)
+    aois = load_aois(path)
+    assert list(aois.columns) == ["aoi_id", "name", "country", "lat", "lon"]
+    assert aois["aoi_id"].tolist() == ["alpha", "beta"]
+    assert aois.set_index("aoi_id").loc["alpha", "lat"] == pytest.approx(52.5)
+
+    with pytest.raises(AppDataError, match="AOI metadata is not available"):
+        load_aois(tmp_path / "absent.parquet")
+
+    duplicated = pd.concat([_aois(), _aois().iloc[[0]]], ignore_index=True)
+    duplicated.to_parquet(path, index=False)
+    with pytest.raises(AppDataError, match="duplicate aoi_id"):
+        load_aois(path)
+
+    bad = _aois()
+    bad.loc[0, "lat"] = 95.0
+    bad.to_parquet(path, index=False)
+    with pytest.raises(AppDataError, match="invalid lat/lon"):
+        load_aois(path)
+
+
+def test_load_basemap_requires_local_feature_collection(tmp_path: Path) -> None:
+    basemap = load_basemap(REPO_BASEMAP)
+    assert basemap["type"] == "FeatureCollection"
+    assert len(basemap["features"]) > 0
+
+    with pytest.raises(AppDataError, match="Offline basemap is not available"):
+        load_basemap(tmp_path / "absent.geojson")
+
+    not_collection = tmp_path / "bad.geojson"
+    not_collection.write_text('{"type": "Feature"}', encoding="utf-8")
+    with pytest.raises(AppDataError, match="not a GeoJSON FeatureCollection"):
+        load_basemap(not_collection)
+
+    not_json = tmp_path / "broken.geojson"
+    not_json.write_text("{", encoding="utf-8")
+    with pytest.raises(AppDataError, match="Could not read offline basemap"):
+        load_basemap(not_json)
