@@ -11,6 +11,8 @@ from open_revisit.app_analytics import (
     map_points,
     revisit_dumbbell,
     sla_curve,
+    threshold_grid,
+    threshold_sensitivity,
 )
 from open_revisit.app_data import AppDataError, build_app_metrics, select_observations
 from open_revisit.metrics import gap_table, service_level_success
@@ -303,3 +305,83 @@ def test_revisit_dumbbell_matches_gap_table_and_keeps_fractions() -> None:
     assert np.isfinite(
         revisit_dumbbell(empty.summary).select_dtypes("number").to_numpy()
     ).all()
+
+
+def test_threshold_grid_is_deterministic_and_includes_endpoints_and_current() -> None:
+    grid = threshold_grid(0.83)
+    assert grid[0] == 0.0 and grid[-1] == 1.0 and 0.83 in grid
+    assert len(grid) == 22 and list(grid) == sorted(set(grid))
+    assert threshold_grid(0.80) == threshold_grid(0.8)
+    assert len(threshold_grid(0.80)) == 21
+    assert 0.15 in threshold_grid(0.5)
+    with pytest.raises(AppDataError):
+        threshold_grid(1.5)
+
+
+def _sensitivity(observations, *, aoi_ids=("alpha", "beta"), every_days=7):
+    return threshold_sensitivity(
+        observations,
+        aoi_ids=aoi_ids,
+        start=START,
+        end=END,
+        min_coverage=0.95,
+        thresholds=threshold_grid(0.80),
+        horizon_days=60,
+        every_days=every_days,
+    )
+
+
+def test_threshold_sensitivity_recomputes_usability_and_is_monotonic() -> None:
+    observations = _observations()
+    sensitivity = _sensitivity(observations)
+    assert list(sensitivity.columns) == [
+        "aoi_id",
+        "min_clear",
+        "n_observations",
+        "n_usable",
+        "usable_rate",
+        "p_within_7d",
+        "sla_success",
+    ]
+    assert sensitivity.groupby("aoi_id")["min_clear"].apply(len).to_dict() == {
+        "alpha": 21,
+        "beta": 21,
+    }
+    for column in ("n_usable", "usable_rate", "p_within_7d", "sla_success"):
+        assert (
+            sensitivity.groupby("aoi_id")[column]
+            .apply(lambda s: s.is_monotonic_decreasing)
+            .all()
+        ), column
+    assert (
+        sensitivity[["usable_rate", "p_within_7d", "sla_success"]]
+        .apply(lambda c: c.between(0.0, 1.0).all())
+        .all()
+    )
+    assert np.isfinite(sensitivity.select_dtypes("number").to_numpy()).all()
+
+    alpha = sensitivity.loc[sensitivity["aoi_id"] == "alpha"].set_index("min_clear")
+    assert (alpha["n_observations"] == 4).all()  # incomplete row never counted
+    assert alpha.loc[0.0, "n_usable"] == 3  # low-coverage row excluded even at 0.0
+    assert alpha.loc[0.8, "n_usable"] == 2
+    assert alpha.loc[1.0, "n_usable"] == 0 and alpha.loc[1.0, "p_within_7d"] == 0.0
+
+    flipped = observations.copy()
+    flipped["usable"] = True
+    pd.testing.assert_frame_equal(_sensitivity(flipped), sensitivity)
+
+    parity = _metrics().summary.set_index("aoi_id")
+    for aoi_id in ("alpha", "beta"):
+        at_current = sensitivity.loc[
+            (sensitivity["aoi_id"] == aoi_id) & (sensitivity["min_clear"] == 0.8)
+        ].iloc[0]
+        assert at_current["usable_rate"] == parity.loc[aoi_id, "usable_rate"]
+        assert at_current["p_within_7d"] == parity.loc[aoi_id, "p_within_7d"]
+        assert at_current["sla_success"] == parity.loc[aoi_id, "sla_success"]
+
+    only_beta = _sensitivity(observations, aoi_ids=("beta",))
+    assert set(only_beta["aoi_id"]) == {"beta"}
+    pd.testing.assert_frame_equal(
+        only_beta.reset_index(drop=True),
+        sensitivity.loc[sensitivity["aoi_id"] == "beta"].reset_index(drop=True),
+    )

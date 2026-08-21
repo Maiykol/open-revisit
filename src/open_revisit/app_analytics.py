@@ -7,12 +7,23 @@ only selects, joins, and reshapes frames for display.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 import pandas as pd
 
-from open_revisit.app_data import AOI_COLUMNS, AppDataError
-from open_revisit.metrics import service_level_success
+from open_revisit.app_data import (
+    AOI_COLUMNS,
+    AppDataError,
+    select_observations,
+    validate_selection,
+)
+from open_revisit.metrics import (
+    service_level_success,
+    survival_curve,
+    wait_daily,
+    within_probability,
+)
 
 MapMetric = Literal["p_within_7d", "sla_success", "usable_rate", "longest_outage_days"]
 MAP_METRICS: tuple[MapMetric, ...] = (
@@ -150,3 +161,92 @@ def revisit_dumbbell(summary: pd.DataFrame) -> pd.DataFrame:
         ascending=[True, True],
         kind="stable",
     ).reset_index(drop=True)
+
+
+def threshold_grid(
+    min_clear: float, *, step: float = DEFAULT_THRESHOLD_STEP
+) -> tuple[float, ...]:
+    """Return a deterministic min_clear grid over [0, 1] including the current value."""
+    if not 0.0 <= min_clear <= 1.0:
+        raise AppDataError("min_clear must be between 0 and 1.")
+    count = round(1.0 / step)
+    values = {round(index / count, 6) for index in range(count + 1)}
+    values.add(float(min_clear))
+    return tuple(sorted(values))
+
+
+def threshold_sensitivity(
+    observations: pd.DataFrame,
+    *,
+    aoi_ids: tuple[str, ...],
+    start: date,
+    end: date,
+    min_coverage: float,
+    thresholds: tuple[float, ...],
+    horizon_days: int,
+    every_days: int,
+) -> pd.DataFrame:
+    """Recompute usability per min_clear. Units: counts, rates, probabilities.
+
+    Denominators: complete observations (usable_rate) and evaluated start days
+    (p_within_7d, sla_success). The persisted ``usable`` flag is never used.
+    """
+    rows: list[dict[str, object]] = []
+    for min_clear in thresholds:
+        validate_selection(
+            observations,
+            aoi_ids=aoi_ids,
+            start=start,
+            end=end,
+            min_clear=min_clear,
+            min_coverage=min_coverage,
+            horizon_days=horizon_days,
+            every_days=every_days,
+        )
+        selected = select_observations(
+            observations,
+            aoi_ids=aoi_ids,
+            start=start,
+            end=end,
+            min_clear=min_clear,
+            min_coverage=min_coverage,
+        )
+        for aoi_id in aoi_ids:
+            complete = selected.loc[
+                (selected["aoi_id"] == aoi_id) & selected["complete"].astype(bool)
+            ]
+            usable = complete.loc[complete["usable"].astype(bool)]
+            waits = wait_daily(
+                pd.Series(usable["observed_at"]),
+                start=pd.Timestamp(start),
+                end=pd.Timestamp(end),
+                horizon_days=horizon_days,
+            )
+            survival = survival_curve(waits, horizon_days=horizon_days)
+            n_observations = len(complete)
+            n_usable = len(usable)
+            rows.append(
+                {
+                    "aoi_id": aoi_id,
+                    "min_clear": float(min_clear),
+                    "n_observations": n_observations,
+                    "n_usable": n_usable,
+                    "usable_rate": (
+                        0.0 if n_observations == 0 else n_usable / n_observations
+                    ),
+                    "p_within_7d": within_probability(survival, 7),
+                    "sla_success": service_level_success(waits, every_days),
+                }
+            )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "aoi_id",
+            "min_clear",
+            "n_observations",
+            "n_usable",
+            "usable_rate",
+            "p_within_7d",
+            "sla_success",
+        ],
+    )
