@@ -62,5 +62,5 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["geopandas", "geopandas.*"]
+module = ["geopandas", "geopandas.*", "rasterio", "rasterio.*"]
 ignore_missing_imports = true

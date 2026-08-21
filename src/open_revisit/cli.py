@@ -13,6 +13,7 @@ from open_revisit.aoi import build_aoi_files
 from open_revisit.config import load_config
 from open_revisit.discovery import AoiDiscoveryCounts, run_discovery
 from open_revisit.logging import emit_event
+from open_revisit.processing import AoiProcessCounts, run_processing
 
 app = typer.Typer(
     name="open-revisit",
@@ -171,5 +172,82 @@ def discover(
         scenes=summary.n_scenes,
         scene_aoi=summary.n_scene_aoi,
         scenes_superseded=summary.n_superseded,
+        config_hash=config.config_hash(),
+    )
+
+
+@app.command("process")
+def process(
+    context: typer.Context,
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Validated YAML configuration.",
+        ),
+    ] = Path("config/default.yaml"),
+    aoi: Annotated[
+        str | None, typer.Option("--aoi", help="Restrict processing to one AOI id.")
+    ] = None,
+    workers: Annotated[
+        int, typer.Option("--workers", min=1, help="Concurrent raster readers.")
+    ] = 8,
+    force: Annotated[
+        bool, typer.Option("--force", help="Recompute already-processed keys.")
+    ] = False,
+    keep_rasters: Annotated[
+        bool,
+        typer.Option(
+            "--keep-rasters", help="Persist compressed per-observation composites."
+        ),
+    ] = False,
+) -> None:
+    """Read SCL windows and derive per-scene and per-datatake observations."""
+    config = load_config(config_path)
+    if aoi is not None:
+        config = config.model_copy(update={"aoi_ids": (aoi,)})
+    aoi_path = config.data_dir / "aois.parquet"
+    if not aoi_path.exists():
+        raise FileNotFoundError(
+            f"AOI table not found: {aoi_path}; run 'open-revisit aois build' first"
+        )
+    aois = gpd.read_parquet(aoi_path)
+    state = _state(context)
+
+    def log_aoi(counts: AoiProcessCounts) -> None:
+        emit_event(
+            "process.aoi",
+            json_logs=state.json_logs,
+            aoi_id=counts.aoi_id,
+            scenes=counts.scenes,
+            observations=counts.observations,
+            usable=counts.usable,
+            failed_scenes=counts.failed_scenes,
+            skipped_scenes=counts.skipped_scenes,
+            skipped_observations=counts.skipped_observations,
+        )
+
+    summary = run_processing(
+        config,
+        aois,
+        workers=workers,
+        force=force,
+        keep_rasters=keep_rasters,
+        on_aoi_complete=log_aoi,
+    )
+    emit_event(
+        "process.complete",
+        json_logs=state.json_logs,
+        processed_scenes=summary.processed_scenes,
+        processed_observations=summary.processed_observations,
+        skipped_scenes=summary.skipped_scenes,
+        skipped_observations=summary.skipped_observations,
+        failed_scenes=summary.failed_scenes,
+        scene_stats=summary.n_scene_stats,
+        observations=summary.n_observations,
+        usable=summary.n_usable,
         config_hash=config.config_hash(),
     )
