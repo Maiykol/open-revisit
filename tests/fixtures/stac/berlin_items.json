@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "open_revisit:fixture_source": "Earth Search v1 response recorded 2026-08-21 and trimmed to fields used by M1",
+  "open_revisit:fixture_note": "The third feature models a later reprocessing sequence of the first recorded feature.",
+  "features": [
+    {
+      "type": "Feature",
+      "stac_version": "1.0.0",
+      "id": "S2A_32UQD_20250626_0_L2A",
+      "collection": "sentinel-2-l2a",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[11.994655250134969, 53.21198351848647], [11.927835243788252, 52.2262340066898], [13.53101850531067, 52.17549424226928], [13.63416714378559, 53.159413588610356], [11.994655250134969, 53.21198351848647]]]
+      },
+      "properties": {
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 98.219323,
+        "proj:epsg": 32632,
+        "grid:code": "MGRS-32UQD",
+        "s2:nodata_pixel_percentage": 0,
+        "s2:cloud_shadow_percentage": 1.439813,
+        "s2:unclassified_percentage": 0.028723,
+        "s2:medium_proba_clouds_percentage": 8.61455,
+        "s2:high_proba_clouds_percentage": 87.284118,
+        "s2:thin_cirrus_percentage": 2.320659,
+        "s2:snow_ice_percentage": 0,
+        "s2:processing_baseline": "05.11",
+        "s2:product_uri": "S2A_MSIL2A_20250626T101701_N0511_R065_T32UQD_20250626T120604.SAFE",
+        "s2:generation_time": "2025-06-26T12:06:04.000000Z",
+        "s2:datatake_id": "GS2A_20250626T101701_052286_N05.11",
+        "datetime": "2025-06-26T10:26:27.025000Z",
+        "s2:sequence": "0"
+      },
+      "assets": {
+        "scl": {"href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/32/U/QD/2025/6/S2A_32UQD_20250626_0_L2A/SCL.tif"},
+        "visual": {"href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/32/U/QD/2025/6/S2A_32UQD_20250626_0_L2A/TCI.tif"}
+      },
+      "links": []
+    },
+    {
+      "type": "Feature",
+      "stac_version": "1.0.0",
+      "id": "S2A_33UUU_20250626_0_L2A",
+      "collection": "sentinel-2-l2a",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[12.004776505505362, 53.21196922549698], [12.071609146443507, 52.22622021187267], [13.678529151795942, 52.25515957252249], [13.648326817133608, 53.24195439072247], [12.004776505505362, 53.21196922549698]]]
+      },
+      "properties": {
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 99.12793,
+        "proj:epsg": 32633,
+        "grid:code": "MGRS-33UUU",
+        "s2:nodata_pixel_percentage": 0,
+        "s2:cloud_shadow_percentage": 0.764964,
+        "s2:unclassified_percentage": 0.014247,
+        "s2:medium_proba_clouds_percentage": 8.91064,
+        "s2:high_proba_clouds_percentage": 87.738121,
+        "s2:thin_cirrus_percentage": 2.479169,
+        "s2:snow_ice_percentage": 0,
+        "s2:processing_baseline": "05.11",
+        "s2:product_uri": "S2A_MSIL2A_20250626T101701_N0511_R065_T33UUU_20250626T120604.SAFE",
+        "s2:generation_time": "2025-06-26T12:06:04.000000Z",
+        "s2:datatake_id": "GS2A_20250626T101701_052286_N05.11",
+        "datetime": "2025-06-26T10:26:26.184000Z",
+        "s2:sequence": "0"
+      },
+      "assets": {
+        "scl": {"href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/33/U/UU/2025/6/S2A_33UUU_20250626_0_L2A/SCL.tif"},
+        "visual": {"href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/33/U/UU/2025/6/S2A_33UUU_20250626_0_L2A/TCI.tif"}
+      },
+      "links": []
+    },
+    {
+      "type": "Feature",
+      "stac_version": "1.0.0",
+      "id": "S2A_32UQD_20250626_2_L2A",
+      "collection": "sentinel-2-l2a",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[11.994655250134969, 53.21198351848647], [11.927835243788252, 52.2262340066898], [13.53101850531067, 52.17549424226928], [13.63416714378559, 53.159413588610356], [11.994655250134969, 53.21198351848647]]]
+      },
+      "properties": {
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 98.219323,
+        "proj:epsg": 32632,
+        "grid:code": "MGRS-32UQD",
+        "s2:nodata_pixel_percentage": 0,
+        "s2:cloud_shadow_percentage": 1.439813,
+        "s2:unclassified_percentage": 0.028723,
+        "s2:medium_proba_clouds_percentage": 8.61455,
+        "s2:high_proba_clouds_percentage": 87.284118,
+        "s2:thin_cirrus_percentage": 2.320659,
+        "s2:snow_ice_percentage": 0,
+        "s2:processing_baseline": "05.11",
+        "s2:product_uri": "S2A_MSIL2A_20250626T101701_N0511_R065_T32UQD_20250701T120604.SAFE",
+        "s2:generation_time": "2025-07-01T12:06:04.000000Z",
+        "s2:datatake_id": "GS2A_20250626T101701_052286_N05.11",
+        "datetime": "2025-06-26T10:26:27.025000Z",
+        "s2:sequence": "2"
+      },
+      "assets": {
+        "scl": {"href": "https://example.invalid/reprocessed/SCL.tif"},
+        "visual": {"href": "https://example.invalid/reprocessed/TCI.tif"}
+      },
+      "links": []
+    }
+  ],
+  "links": []
+}

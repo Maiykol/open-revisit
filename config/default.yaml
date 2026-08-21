@@ -1,0 +1,40 @@
+stac_url: https://earth-search.aws.element84.com/v1
+collection: sentinel-2-l2a
+start: 2022-01-01
+end: 2025-12-31
+aois:
+  - hamburg
+  - berlin
+  - munich
+  - london
+  - dublin
+  - amsterdam
+  - paris
+  - marseille
+  - madrid
+  - lisbon
+  - rome
+  - athens
+  - zurich
+  - innsbruck
+  - warsaw
+  - copenhagen
+  - stockholm
+  - oslo
+  - tromso
+  - reykjavik
+data_dir: data
+late_overlap_days: 7
+max_aoi_km2: 2500
+horizon_days: 60
+classes:
+  clear: [4, 5, 6]
+  cloud: [8, 9, 10]
+  shadow: [2, 3]
+  snow: [11]
+  unclassified: [7]
+  defective: [1]
+  nodata: [0]
+thresholds:
+  min_clear: 0.80
+  min_coverage: 0.95
