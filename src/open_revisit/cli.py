@@ -15,6 +15,8 @@ from open_revisit.discovery import AoiDiscoveryCounts, run_discovery
 from open_revisit.logging import emit_event
 from open_revisit.metric_pipeline import query_sla, run_metrics
 from open_revisit.processing import AoiProcessCounts, run_processing
+from open_revisit.report import run_report
+from open_revisit.run_pipeline import execute_run
 
 app = typer.Typer(
     name="open-revisit",
@@ -173,6 +175,7 @@ def discover(
         scenes=summary.n_scenes,
         scene_aoi=summary.n_scene_aoi,
         scenes_superseded=summary.n_superseded,
+        bytes_transferred=summary.bytes_transferred,
         config_hash=config.config_hash(),
     )
 
@@ -247,6 +250,7 @@ def process(
         skipped_scenes=summary.skipped_scenes,
         skipped_observations=summary.skipped_observations,
         failed_scenes=summary.failed_scenes,
+        bytes_transferred=summary.bytes_transferred,
         scene_stats=summary.n_scene_stats,
         observations=summary.n_observations,
         usable=summary.n_usable,
@@ -275,6 +279,65 @@ def metrics_command(
         "metrics.complete",
         json_logs=_state(context).json_logs,
         **summary.table_rows,
+        config_hash=summary.config_hash,
+    )
+
+
+@app.command("report")
+def report_command(
+    context: typer.Context,
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Config identifying existing Parquet report inputs.",
+        ),
+    ] = Path("config/default.yaml"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Report artifact directory.")
+    ] = Path("reports"),
+) -> None:
+    """Generate the seven case-study figures and summary table."""
+    summary = run_report(load_config(config_path), output_dir=output_dir)
+    emit_event(
+        "report.complete",
+        json_logs=_state(context).json_logs,
+        artifacts=[str(path) for path in summary.artifacts],
+        survival_aois=list(summary.survival_aois),
+        rgb_examples=list(summary.rgb_examples),
+        bytes_transferred=summary.bytes_transferred,
+        config_hash=summary.config_hash,
+    )
+
+
+@app.command("run")
+def run_command(
+    context: typer.Context,
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Validated YAML configuration.",
+        ),
+    ] = Path("config/default.yaml"),
+    workers: Annotated[
+        int, typer.Option("--workers", min=1, help="Concurrent raster readers.")
+    ] = 8,
+) -> None:
+    """Run discover, process, metrics, and report with a durable run record."""
+    summary = execute_run(load_config(config_path), workers=workers)
+    emit_event(
+        "run.complete",
+        json_logs=_state(context).json_logs,
+        record=str(summary.record_path),
+        wall_clock_seconds=summary.wall_clock_seconds,
+        bytes_transferred=summary.bytes_transferred,
         config_hash=summary.config_hash,
     )
 

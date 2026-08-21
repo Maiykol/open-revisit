@@ -87,6 +87,7 @@ class ProcessingSummary:
     n_scene_stats: int
     n_observations: int
     n_usable: int
+    bytes_transferred: int
 
 
 def _nullable_int(value: Any) -> int | None:
@@ -324,4 +325,5 @@ def run_processing(
         n_usable=int(current_observations["usable"].sum())
         if not current_observations.empty
         else 0,
+        bytes_transferred=sum(result.bytes_transferred for result in results),
     )

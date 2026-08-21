@@ -16,4 +16,4 @@ test:
 	uv run pytest -m "not network"
 
 test-network:
-	uv run pytest -m network
+	uv run pytest -m network --no-cov

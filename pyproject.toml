@@ -36,6 +36,7 @@ dev = [
   "pandas-stubs==3.0.5.260730",
   "pyarrow-stubs==20.0.0.20260819",
   "pytest==8.4.1",
+  "pytest-cov==7.1.0",
   "ruff==0.12.10",
   "types-pyyaml==6.0.12.20250516",
   "types-shapely==2.1.0.20260728",
@@ -45,7 +46,7 @@ dev = [
 packages = ["src/open_revisit"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-markers"
+addopts = "--strict-markers --cov=src/open_revisit --cov-report=term-missing --cov-fail-under=85"
 markers = ["network: live tests excluded from CI"]
 testpaths = ["tests"]
 

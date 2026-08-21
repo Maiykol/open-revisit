@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from open_revisit.discovery import discovery_start
 from open_revisit.stac import (
     deduplicate_scenes,
     item_to_scene_row,
@@ -83,6 +84,27 @@ def test_search_start_uses_seven_day_watermark_overlap() -> None:
         search_start(configured_start, datetime(2024, 1, 3, tzinfo=UTC))
         == configured_start
     )
+
+
+def test_discovery_start_backfills_when_config_predates_stored_coverage() -> None:
+    configured = datetime(2022, 1, 1, tzinfo=UTC)
+    watermark = datetime(2024, 12, 31, tzinfo=UTC)
+
+    assert (
+        discovery_start(
+            configured,
+            watermark,
+            datetime(2024, 1, 1, tzinfo=UTC),
+            overlap_days=7,
+        )
+        == configured
+    )
+    assert discovery_start(
+        configured,
+        watermark,
+        datetime(2022, 1, 1, tzinfo=UTC),
+        overlap_days=7,
+    ) == datetime(2024, 12, 24, tzinfo=UTC)
 
 
 def test_search_intervals_are_contiguous_and_cover_the_period() -> None:

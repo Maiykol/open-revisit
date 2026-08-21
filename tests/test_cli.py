@@ -2,10 +2,13 @@ import csv
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from open_revisit import __version__
 from open_revisit.cli import app
+from open_revisit.report import ReportSummary
+from open_revisit.run_pipeline import PipelineRunSummary
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "stac" / "berlin_items.json"
 
@@ -107,3 +110,52 @@ def test_discover_command_is_idempotent_with_fixture(tmp_path: Path) -> None:
     assert len(pd.read_parquet(data_dir / "scene_aoi.parquet")) == 2
     assert len(pd.read_parquet(data_dir / "scenes_superseded.parquet")) == 1
     assert len(pd.read_parquet(data_dir / "ingest_state.parquet")) == 1
+
+
+def test_report_and_run_commands_delegate_to_orchestrators(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "start: 2024-01-01\nend: 2024-12-31\naois: [alpha]\n"
+        f"data_dir: {tmp_path / 'data'}\n",
+        encoding="utf-8",
+    )
+    artifact = tmp_path / "reports" / "figure.png"
+    record = tmp_path / "data" / "runs" / "record.json"
+    report_calls: list[Path] = []
+    run_calls: list[int] = []
+
+    def fake_report(config: object, *, output_dir: Path) -> ReportSummary:
+        del config
+        report_calls.append(output_dir)
+        return ReportSummary("hash", (artifact,), ("alpha",), ("one", "two"), 12)
+
+    def fake_run(config: object, *, workers: int) -> PipelineRunSummary:
+        del config
+        run_calls.append(workers)
+        return PipelineRunSummary("hash", record, 1.25, 34)
+
+    monkeypatch.setattr("open_revisit.cli.run_report", fake_report)
+    monkeypatch.setattr("open_revisit.cli.execute_run", fake_run)
+    runner = CliRunner()
+    report_result = runner.invoke(
+        app,
+        [
+            "report",
+            "--config",
+            str(config_path),
+            "--output-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+    run_result = runner.invoke(
+        app, ["run", "--config", str(config_path), "--workers", "3"]
+    )
+
+    assert report_result.exit_code == 0, report_result.output
+    assert "report.complete" in report_result.output
+    assert report_calls == [tmp_path / "reports"]
+    assert run_result.exit_code == 0, run_result.output
+    assert "run.complete" in run_result.output
+    assert run_calls == [3]

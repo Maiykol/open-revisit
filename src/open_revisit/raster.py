@@ -36,6 +36,18 @@ class SclWindowRead:
     values: NDArray[np.uint8]
     source_window: Window
     source_crs: CRS
+    bytes_transferred: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RgbChipRead:
+    """One RGB visual window reprojected to an AOI analysis grid."""
+
+    values: NDArray[np.uint8]
+    source_window: Window
+    source_crs: CRS
+    bytes_transferred: int
+    valid_mask: NDArray[np.bool_] | None = None
 
 
 def _source_window(dataset: DatasetReader, grid: AnalysisGrid) -> Window:
@@ -98,6 +110,59 @@ def read_scl_window(href: str | Path, grid: AnalysisGrid) -> SclWindowRead:
             values=destination,
             source_window=source_window,
             source_crs=dataset.crs,
+            bytes_transferred=int(source.nbytes),
+        )
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential_jitter(initial=1, max=30),
+    reraise=True,
+)
+def read_rgb_chip(href: str | Path, grid: AnalysisGrid) -> RgbChipRead:
+    """Read an RGB visual window and reproject it to ``grid`` at 20 m."""
+    with rasterio.Env(**_GDAL_ENV), rasterio.open(str(href)) as dataset:
+        if dataset.count < 3:
+            raise ValueError("visual raster must contain at least three bands")
+        if dataset.crs is None:
+            raise ValueError("visual raster has no CRS")
+        source_window = _source_window(dataset, grid)
+        source = dataset.read([1, 2, 3], window=source_window)
+        source_mask = np.any(source != 0, axis=0).astype(np.uint8) * 255
+        destination = np.zeros((3, grid.height, grid.width), dtype=np.uint8)
+        destination_mask = np.zeros(grid.shape, dtype=np.uint8)
+        source_transform = dataset.window_transform(source_window)
+        for band in range(3):
+            reproject(
+                source=source[band],
+                destination=destination[band],
+                src_transform=source_transform,
+                src_crs=dataset.crs,
+                src_nodata=dataset.nodata,
+                dst_transform=grid.transform,
+                dst_crs=grid.crs,
+                dst_nodata=0,
+                resampling=Resampling.bilinear,
+                init_dest_nodata=True,
+            )
+        reproject(
+            source=source_mask,
+            destination=destination_mask,
+            src_transform=source_transform,
+            src_crs=dataset.crs,
+            src_nodata=0,
+            dst_transform=grid.transform,
+            dst_crs=grid.crs,
+            dst_nodata=0,
+            resampling=Resampling.nearest,
+            init_dest_nodata=True,
+        )
+        return RgbChipRead(
+            values=np.moveaxis(destination, 0, -1),
+            source_window=source_window,
+            source_crs=dataset.crs,
+            bytes_transferred=int(source.nbytes),
+            valid_mask=destination_mask > 0,
         )
 
 

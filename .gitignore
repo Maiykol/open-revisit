@@ -1,5 +1,8 @@
 .venv/
-data/
+/data/*
+!/data/runs/
+/data/runs/*
+!/data/runs/*.json
 
 # Local planning inputs copied into the repository's governance docs.
 /AGENT_BRIEF.md

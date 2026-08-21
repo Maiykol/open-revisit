@@ -10,7 +10,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import transform_bounds
 
 from open_revisit.grid import AnalysisGrid
-from open_revisit.raster import read_scl_window
+from open_revisit.raster import read_rgb_chip, read_scl_window
 
 
 def _grid(
@@ -126,3 +126,33 @@ def test_nodata_stripes_survive_windowed_read(tmp_path: Path) -> None:
     assert counts[0] == 20
     assert counts[4] == 80
     assert counts.sum() == grid.n_aoi_pixels
+
+
+def test_rgb_chip_reads_three_bands_and_accounts_source_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "visual.tif"
+    transform_value = from_origin(500_000.0, 5_800_000.0, 20.0, 20.0)
+    source = np.zeros((3, 10, 10), dtype=np.uint8)
+    source[0] = 20
+    source[1] = 100
+    source[2] = 220
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=10,
+        height=10,
+        count=3,
+        dtype="uint8",
+        crs="EPSG:32633",
+        transform=transform_value,
+    ) as dataset:
+        dataset.write(source)
+    grid = _grid(epsg=32633, transform=transform_value)
+
+    result = read_rgb_chip(path, grid)
+
+    assert result.values.shape == (10, 10, 3)
+    assert result.values[5, 5].tolist() == [20, 100, 220]
+    assert result.bytes_transferred == 300
+    assert result.valid_mask is not None
+    assert result.valid_mask.all()

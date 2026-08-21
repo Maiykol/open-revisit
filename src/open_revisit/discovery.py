@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
@@ -41,6 +42,7 @@ class AoiDiscoveryCounts:
     new: int
     superseded: int
     watermark: datetime | None
+    bytes_transferred: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,7 @@ class DiscoverySummary:
     n_scenes: int
     n_scene_aoi: int
     n_superseded: int
+    bytes_transferred: int
 
 
 def _resolve_scene_id(scene_id: str, mapping_by_id: Mapping[str, str]) -> str:
@@ -92,6 +95,36 @@ def _watermark_by_aoi(state: pd.DataFrame, collection: str) -> dict[str, datetim
     return result
 
 
+def _coverage_start_by_aoi(
+    scenes: pd.DataFrame, links: pd.DataFrame
+) -> dict[str, datetime]:
+    """Return the earliest stored acquisition timestamp linked to each AOI."""
+    if scenes.empty or links.empty:
+        return {}
+    linked = links[["aoi_id", "scene_id"]].merge(
+        scenes[["scene_id", "datetime"]], on="scene_id", how="inner"
+    )
+    linked["datetime"] = pd.to_datetime(linked["datetime"], utc=True, errors="coerce")
+    earliest = linked.dropna(subset=["datetime"]).groupby("aoi_id")["datetime"].min()
+    return {
+        str(aoi_id): pd.Timestamp(value).to_pydatetime()
+        for aoi_id, value in earliest.items()
+    }
+
+
+def discovery_start(
+    configured_start: datetime,
+    watermark: datetime | None,
+    coverage_start: datetime | None,
+    *,
+    overlap_days: int,
+) -> datetime:
+    """Choose a backfill start or the ordinary watermark-overlap start."""
+    if coverage_start is None or configured_start < coverage_start:
+        return configured_start
+    return search_start(configured_start, watermark, overlap_days=overlap_days)
+
+
 def _overlap_fraction(aoi: BaseGeometry, item: Mapping[str, Any]) -> float:
     geometry_value = item.get("geometry")
     if not isinstance(geometry_value, Mapping):
@@ -124,6 +157,7 @@ def run_discovery(
         existing_superseded.get("scene_id", pd.Series(dtype=str)).astype(str)
     )
     previous_watermarks = _watermark_by_aoi(existing_state, config.collection)
+    coverage_starts = _coverage_start_by_aoi(existing_scenes, existing_links)
 
     aoi_lookup = {str(row.aoi_id): row.geometry for row in aois.itertuples(index=False)}
     missing_aois = set(config.aoi_ids) - aoi_lookup.keys()
@@ -137,15 +171,23 @@ def run_discovery(
     raw_links: list[dict[str, Any]] = []
     raw_ids_by_aoi: dict[str, set[str]] = {}
     fetched_count_by_aoi: dict[str, int] = {}
+    bytes_by_aoi: dict[str, int] = {}
     watermark_rows: list[dict[str, Any]] = []
 
     for aoi_id in config.aoi_ids:
         geometry = aoi_lookup[aoi_id]
         previous = previous_watermarks.get(aoi_id)
-        start = search_start(
-            configured_start, previous, overlap_days=config.late_overlap_days
+        coverage_start = coverage_starts.get(aoi_id)
+        start = discovery_start(
+            configured_start,
+            previous,
+            coverage_start,
+            overlap_days=config.late_overlap_days,
         )
         items = fetch_items(config, geometry, start, configured_end)
+        bytes_by_aoi[aoi_id] = len(
+            json.dumps(items, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
         raw_ids = {str(item["id"]) for item in items}
         raw_ids_by_aoi[aoi_id] = raw_ids
         fetched_count_by_aoi[aoi_id] = len(items)
@@ -241,6 +283,7 @@ def run_discovery(
             ),
             superseded=len(raw_ids & loser_ids),
             watermark=state_watermarks.get(aoi_id),
+            bytes_transferred=bytes_by_aoi[aoi_id],
         )
         per_aoi.append(counts)
         if on_aoi_complete is not None:
@@ -251,4 +294,5 @@ def run_discovery(
         n_scenes=len(active_scenes),
         n_scene_aoi=len(all_links),
         n_superseded=len(all_superseded),
+        bytes_transferred=sum(bytes_by_aoi.values()),
     )

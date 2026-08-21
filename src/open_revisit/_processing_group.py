@@ -32,6 +32,7 @@ class GroupResult:
     aoi_id: str
     stats: tuple[dict[str, Any], ...]
     observation: dict[str, Any]
+    bytes_transferred: int
 
 
 def _failed_stats_row(
@@ -171,6 +172,7 @@ def process_group(
     config_hash = config.config_hash()
     layers: list[SceneLayer] = []
     stats: list[dict[str, Any]] = []
+    bytes_transferred = 0
     ordered = scenes.sort_values("scene_id", kind="stable")
     for scene in ordered.itertuples(index=False):
         scene_id = str(scene.scene_id)
@@ -178,6 +180,7 @@ def process_group(
             if pd.isna(scene.scl_href):
                 raise ValueError("scene has no SCL asset href")
             raster = reader(str(scene.scl_href), grid)
+            bytes_transferred += raster.bytes_transferred
             stats.append(
                 _successful_stats_row(
                     aoi_id=aoi_id,
@@ -228,4 +231,9 @@ def process_group(
         stats=stats,
         summary=summary,
     )
-    return GroupResult(aoi_id=aoi_id, stats=tuple(stats), observation=observation)
+    return GroupResult(
+        aoi_id=aoi_id,
+        stats=tuple(stats),
+        observation=observation,
+        bytes_transferred=bytes_transferred,
+    )
