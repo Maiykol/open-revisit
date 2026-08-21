@@ -1,0 +1,155 @@
+{
+  "byte_accounting": {
+    "method": "UTF-8 STAC item JSON plus decoded raster source-window bytes",
+    "scl_window_bytes": 17514014331,
+    "stac_json_bytes": 515851603,
+    "visual_window_bytes": 42998466
+  },
+  "bytes_transferred": 18072864400,
+  "completed_at": "2026-08-21T17:15:05.636419+00:00",
+  "config_hash": "f33bae2b5ac9c19b740d210280ef6a5c5530032aec054366ebc2f4e943f5dab7",
+  "failure": null,
+  "resolved_config": {
+    "aois": [
+      "hamburg",
+      "berlin",
+      "munich",
+      "london",
+      "dublin",
+      "amsterdam",
+      "paris",
+      "marseille",
+      "madrid",
+      "lisbon",
+      "rome",
+      "athens",
+      "zurich",
+      "innsbruck",
+      "warsaw",
+      "copenhagen",
+      "stockholm",
+      "oslo",
+      "tromso",
+      "reykjavik"
+    ],
+    "classes": {
+      "clear": [
+        4,
+        5,
+        6
+      ],
+      "cloud": [
+        8,
+        9,
+        10
+      ],
+      "defective": [
+        1
+      ],
+      "nodata": [
+        0
+      ],
+      "shadow": [
+        2,
+        3
+      ],
+      "snow": [
+        11
+      ],
+      "unclassified": [
+        7
+      ]
+    },
+    "collection": "sentinel-2-l2a",
+    "data_dir": "data",
+    "end": "2025-12-31",
+    "horizon_days": 60,
+    "late_overlap_days": 7,
+    "max_aoi_km2": 2500.0,
+    "stac_fixture": null,
+    "stac_url": "https://earth-search.aws.element84.com/v1",
+    "start": "2022-01-01",
+    "thresholds": {
+      "min_clear": 0.8,
+      "min_coverage": 0.95
+    }
+  },
+  "schema_version": 1,
+  "stages": {
+    "discover": {
+      "bytes_transferred": 515851603,
+      "duration_seconds": 656.3421576250112,
+      "n_scene_aoi": 23969,
+      "n_scenes": 23969,
+      "n_superseded": 266
+    },
+    "metrics": {
+      "duration_seconds": 0.49025320797227323,
+      "table_rows": {
+        "aoi_gaps": 14601,
+        "aoi_monthly": 240,
+        "aoi_summary": 20,
+        "aoi_survival": 1220,
+        "aoi_wait_daily": 28020,
+        "catalog_filter_eval": 441
+      }
+    },
+    "process": {
+      "bytes_transferred": 17514014331,
+      "duration_seconds": 3447.5394597500563,
+      "failed_scenes": 18,
+      "n_observations": 12184,
+      "n_scene_stats": 23969,
+      "n_usable": 2470,
+      "processed_observations": 12184,
+      "processed_scenes": 23969,
+      "skipped_observations": 0,
+      "skipped_scenes": 0
+    },
+    "report": {
+      "artifacts": [
+        "reports/figures/01_revisit_dumbbell.png",
+        "reports/figures/02_europe_map.png",
+        "reports/figures/03_monthly_reliability.png",
+        "reports/figures/04_wait_survival.png",
+        "reports/figures/05_catalog_filter.png",
+        "reports/figures/06_service_level.png",
+        "reports/figures/07_rgb_examples.png",
+        "reports/tables/aoi_summary.md"
+      ],
+      "bytes_transferred": 42998466,
+      "duration_seconds": 50.38045908405911,
+      "rgb_examples": [
+        "GS2A_20240729T102021_047538_N05.11",
+        "GS2B_20220706T113329_027848_N04.00"
+      ],
+      "survival_aois": [
+        "madrid",
+        "munich",
+        "berlin",
+        "stockholm",
+        "reykjavik",
+        "amsterdam"
+      ]
+    }
+  },
+  "started_at": "2026-08-21T16:05:50.807454+00:00",
+  "status": "completed",
+  "versions": {
+    "duckdb": "1.3.2",
+    "geopandas": "1.1.1",
+    "matplotlib": "3.10.5",
+    "numpy": "2.3.2",
+    "open-revisit": "0.1.0",
+    "pandas": "2.3.1",
+    "pyarrow": "21.0.0",
+    "pydantic": "2.11.7",
+    "pyproj": "3.7.1",
+    "pystac-client": "0.9.0",
+    "python": "3.12.8",
+    "rasterio": "1.4.3",
+    "shapely": "2.1.1",
+    "typer": "0.16.1"
+  },
+  "wall_clock_seconds": 4154.826901874971
+}
