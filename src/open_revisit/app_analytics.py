@@ -19,6 +19,9 @@ from open_revisit.app_data import (
     validate_selection,
 )
 from open_revisit.metrics import (
+    CATALOG_THRESHOLDS,
+    catalog_filter_evaluation,
+    gap_table,
     service_level_success,
     survival_curve,
     wait_daily,
@@ -68,6 +71,14 @@ class MapMetricSpec:
     domain: tuple[float, float]
     value_format: str
     lower_is_better: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TimelineTables:
+    """Datatake-level marks and long effective outages for one AOI."""
+
+    marks: pd.DataFrame
+    outages: pd.DataFrame
 
 
 def map_metric_spec(
@@ -250,3 +261,110 @@ def threshold_sensitivity(
             "sla_success",
         ],
     )
+
+
+def observation_timeline(observations: pd.DataFrame, *, aoi_id: str) -> TimelineTables:
+    """Return one mark per datatake plus effective gaps > 30 days. Unit: days.
+
+    ``incomplete`` is a diagnostic label only; such rows contribute to no metric,
+    including the outage bands, which use the usable timeline via ``gap_table``.
+    """
+    aoi = observations.loc[observations["aoi_id"] == aoi_id].copy()
+    if aoi.empty:
+        raise AppDataError(
+            f"AOI {aoi_id!r} has no observations in the selected period."
+        )
+    complete = aoi["complete"].astype(bool)
+    usable = complete & aoi["usable"].astype(bool)
+    status = pd.Series("unusable", index=aoi.index, dtype="object")
+    status.loc[usable] = "usable"
+    status.loc[~complete] = "incomplete"
+    aoi["status"] = status
+    marks = (
+        aoi[
+            [
+                "aoi_id",
+                "datatake_id",
+                "config_hash",
+                "observed_at",
+                "status",
+                "clear_fraction",
+                "covered_fraction",
+                "catalog_cloud_cover",
+            ]
+        ]
+        .sort_values(["observed_at", "datatake_id"], kind="stable")
+        .reset_index(drop=True)
+    )
+    gaps = gap_table(pd.Series(aoi.loc[usable, "observed_at"]), kind="effective")
+    long = pd.to_numeric(gaps["gap_days"], errors="raise") > OUTAGE_THRESHOLD_DAYS
+    outages = gaps.loc[long, ["gap_start", "gap_end", "gap_days"]].copy()
+    outages.insert(0, "aoi_id", aoi_id)
+    return TimelineTables(marks=marks, outages=outages.reset_index(drop=True))
+
+
+def quality_scatter(observations: pd.DataFrame) -> pd.DataFrame:
+    """Return complete observations for catalog-versus-pixel comparison.
+
+    Unit: catalog percent and AOI fractions. Denominator: complete observations.
+    """
+    complete = observations.loc[observations["complete"].astype(bool)].copy()
+    complete["status"] = (
+        complete["usable"].astype(bool).map({True: "usable", False: "unusable"})
+    )
+    return (
+        complete[
+            [
+                "aoi_id",
+                "datatake_id",
+                "observed_at",
+                "catalog_cloud_cover",
+                "clear_fraction",
+                "covered_fraction",
+                "status",
+            ]
+        ]
+        .sort_values(["aoi_id", "observed_at", "datatake_id"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def catalog_threshold_counts(
+    observations: pd.DataFrame, *, catalog_threshold: int
+) -> dict[str, int | float]:
+    """Return pooled counts at one threshold via the metric-contract function."""
+    if catalog_threshold not in CATALOG_THRESHOLDS:
+        raise AppDataError(
+            "Catalog threshold must be a multiple of 5 between 0 and 100."
+        )
+    evaluation = catalog_filter_evaluation(observations)
+    row = evaluation.loc[
+        (evaluation["aoi_id"] == "ALL") & (evaluation["threshold"] == catalog_threshold)
+    ]
+    if len(row) != 1:
+        raise AppDataError("Catalog filter evaluation must contain one pooled row.")
+    record = row.iloc[0]
+    return {
+        "tp": int(record["tp"]),
+        "fp": int(record["fp"]),
+        "fn": int(record["fn"]),
+        "tn": int(record["tn"]),
+        "precision": float(record["precision"]),
+        "recall": float(record["recall"]),
+    }
+
+
+def seasonal_comparison(monthly: pd.DataFrame) -> pd.DataFrame:
+    """Return monthly P(wait ≤ 7) per AOI with all 12 months.
+
+    Denominator: t0 days in month.
+    """
+    frame = monthly[["aoi_id", "month", "p_within_7d", "n_days"]].copy()
+    frame["month"] = frame["month"].astype(int)
+    months = frame.groupby("aoi_id")["month"].apply(lambda s: sorted(s.tolist()))
+    if not all(value == list(range(1, 13)) for value in months):
+        raise AppDataError("Monthly reliability must contain all 12 months per AOI.")
+    frame["month_name"] = frame["month"].map(lambda month: MONTH_NAMES[month - 1])
+    return frame.sort_values(["aoi_id", "month"], kind="stable").reset_index(drop=True)[
+        ["aoi_id", "month", "month_name", "p_within_7d", "n_days"]
+    ]

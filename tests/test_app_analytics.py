@@ -7,15 +7,23 @@ import pandas as pd
 import pytest
 
 from open_revisit.app_analytics import (
+    catalog_threshold_counts,
     map_metric_spec,
     map_points,
+    observation_timeline,
+    quality_scatter,
     revisit_dumbbell,
+    seasonal_comparison,
     sla_curve,
     threshold_grid,
     threshold_sensitivity,
 )
 from open_revisit.app_data import AppDataError, build_app_metrics, select_observations
-from open_revisit.metrics import gap_table, service_level_success
+from open_revisit.metrics import (
+    catalog_filter_evaluation,
+    gap_table,
+    service_level_success,
+)
 
 CONFIG_HASH = "test-config"
 START = date(2024, 1, 1)
@@ -385,3 +393,136 @@ def test_threshold_sensitivity_recomputes_usability_and_is_monotonic() -> None:
         only_beta.reset_index(drop=True),
         sensitivity.loc[sensitivity["aoi_id"] == "beta"].reset_index(drop=True),
     )
+
+
+def test_observation_timeline_keeps_datatake_rows_and_marks_long_outages() -> None:
+    metrics = _metrics()
+    timeline = observation_timeline(metrics.observations, aoi_id="alpha")
+    marks = timeline.marks
+    assert marks["datatake_id"].tolist() == [
+        "a1",
+        "low-coverage",
+        "a2",
+        "incomplete",
+        "a3",
+    ]
+    assert (
+        marks[["aoi_id", "datatake_id", "config_hash"]].drop_duplicates().shape[0] == 5
+    )
+    assert marks.set_index("datatake_id")["status"].to_dict() == {
+        "a1": "usable",
+        "low-coverage": "unusable",
+        "a2": "usable",
+        "incomplete": "incomplete",
+        "a3": "unusable",
+    }
+    assert (
+        pd.Timestamp(marks.set_index("datatake_id").loc["a1", "observed_at"]).hour == 12
+    )
+    assert timeline.outages.columns.tolist() == [
+        "aoi_id",
+        "gap_start",
+        "gap_end",
+        "gap_days",
+    ]
+    assert timeline.outages.empty  # usable gap a1→a2 is 19.25 days
+
+    shifted = pd.concat(
+        [
+            _observations(),
+            pd.DataFrame(
+                [
+                    _row(
+                        "alpha",
+                        "a4",
+                        "2024-03-25T12:00:00Z",
+                        clear=0.95,
+                    )
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    later = build_app_metrics(
+        shifted,
+        aoi_ids=("alpha",),
+        start=START,
+        end=END,
+        min_clear=0.8,
+        min_coverage=0.95,
+        horizon_days=60,
+        every_days=7,
+    )
+    outages = observation_timeline(later.observations, aoi_id="alpha").outages
+    assert outages["gap_days"].tolist() == pytest.approx(
+        [64.75]
+    )  # a2 → a4, incomplete ignored
+    assert outages["aoi_id"].tolist() == ["alpha"]
+
+    beta = observation_timeline(metrics.observations, aoi_id="beta").marks
+    assert set(beta["aoi_id"]) == {"beta"} and len(beta) == 2
+    with pytest.raises(AppDataError, match="no observations"):
+        observation_timeline(metrics.observations, aoi_id="gamma")
+
+
+def test_quality_scatter_excludes_incomplete_and_counts_follow_threshold() -> None:
+    metrics = _metrics()
+    scatter = quality_scatter(metrics.observations)
+    assert "incomplete" not in set(scatter["datatake_id"])
+    assert len(scatter) == 6
+    assert set(scatter["status"]) == {"usable", "unusable"}
+    assert scatter.set_index("datatake_id").loc["low-coverage", "status"] == "unusable"
+    assert list(scatter.columns) == [
+        "aoi_id",
+        "datatake_id",
+        "observed_at",
+        "catalog_cloud_cover",
+        "clear_fraction",
+        "covered_fraction",
+        "status",
+    ]
+
+    counts = catalog_threshold_counts(metrics.observations, catalog_threshold=20)
+    evaluation = catalog_filter_evaluation(metrics.observations)
+    pooled = evaluation.loc[
+        (evaluation["aoi_id"] == "ALL") & (evaluation["threshold"] == 20)
+    ].iloc[0]
+    assert counts == {
+        "tp": int(pooled["tp"]),
+        "fp": int(pooled["fp"]),
+        "fn": int(pooled["fn"]),
+        "tn": int(pooled["tn"]),
+        "precision": float(pooled["precision"]),
+        "recall": float(pooled["recall"]),
+    }
+    assert counts["tp"] + counts["fp"] + counts["fn"] + counts["tn"] == 6
+    assert (
+        catalog_threshold_counts(metrics.observations, catalog_threshold=0)["tp"] == 0
+    )
+    with pytest.raises(AppDataError, match="multiple of 5"):
+        catalog_threshold_counts(metrics.observations, catalog_threshold=17)
+
+
+def test_seasonal_comparison_emits_twelve_months_per_aoi_with_finite_zeroes() -> None:
+    metrics = _metrics()
+    seasonal = seasonal_comparison(metrics.monthly)
+    assert list(seasonal.columns) == [
+        "aoi_id",
+        "month",
+        "month_name",
+        "p_within_7d",
+        "n_days",
+    ]
+    assert seasonal.groupby("aoi_id")["month"].apply(list).to_dict() == {
+        "alpha": list(range(1, 13)),
+        "beta": list(range(1, 13)),
+    }
+    assert seasonal["month_name"].tolist()[:3] == ["Jan", "Feb", "Mar"]
+    empty_months = seasonal.loc[seasonal["n_days"] == 0]
+    assert len(empty_months) > 0 and (empty_months["p_within_7d"] == 0.0).all()
+    assert seasonal["p_within_7d"].between(0.0, 1.0).all()
+    assert np.isfinite(seasonal["p_within_7d"].to_numpy()).all()
+    monthly = metrics.monthly.set_index(["aoi_id", "month"])["p_within_7d"]
+    assert seasonal.set_index(["aoi_id", "month"])["p_within_7d"].equals(monthly)
+    with pytest.raises(AppDataError, match="12 months"):
+        seasonal_comparison(metrics.monthly.iloc[:-1])
