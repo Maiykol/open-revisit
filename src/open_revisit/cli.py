@@ -10,9 +10,10 @@ import typer
 
 from open_revisit import __version__
 from open_revisit.aoi import build_aoi_files
-from open_revisit.config import load_config
+from open_revisit.config import Thresholds, load_config
 from open_revisit.discovery import AoiDiscoveryCounts, run_discovery
 from open_revisit.logging import emit_event
+from open_revisit.metric_pipeline import query_sla, run_metrics
 from open_revisit.processing import AoiProcessCounts, run_processing
 
 app = typer.Typer(
@@ -250,4 +251,86 @@ def process(
         observations=summary.n_observations,
         usable=summary.n_usable,
         config_hash=config.config_hash(),
+    )
+
+
+@app.command("metrics")
+def metrics_command(
+    context: typer.Context,
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Validated YAML configuration.",
+        ),
+    ] = Path("config/default.yaml"),
+) -> None:
+    """Compute service metrics from the existing observation table."""
+    config = load_config(config_path)
+    summary = run_metrics(config)
+    emit_event(
+        "metrics.complete",
+        json_logs=_state(context).json_logs,
+        **summary.table_rows,
+        config_hash=summary.config_hash,
+    )
+
+
+@app.command("sla")
+def sla(
+    aoi: Annotated[str, typer.Option("--aoi", help="AOI id to query.")],
+    every: Annotated[
+        int,
+        typer.Option("--every", min=1, help="Required observation interval in days."),
+    ],
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Config identifying the existing metric table rows.",
+        ),
+    ] = Path("config/default.yaml"),
+    min_clear: Annotated[
+        float | None,
+        typer.Option(
+            "--min-clear",
+            min=0.0,
+            max=1.0,
+            help="Select rows for a config with this clear-fraction threshold.",
+        ),
+    ] = None,
+    month: Annotated[
+        int | None,
+        typer.Option("--month", min=1, max=12, help="Restrict by month of t0."),
+    ] = None,
+) -> None:
+    """Answer an SLA question using only an existing daily-wait metric table."""
+    config = load_config(config_path)
+    if min_clear is not None:
+        config = config.model_copy(
+            update={
+                "thresholds": Thresholds(
+                    min_clear=min_clear,
+                    min_coverage=config.thresholds.min_coverage,
+                )
+            }
+        )
+    result = query_sla(
+        config.data_dir,
+        aoi_id=aoi,
+        config_hash=config.config_hash(),
+        every_days=every,
+        month=month,
+    )
+    typer.echo(
+        f"aoi_id={result.aoi_id} every_days={result.every_days} "
+        f"month={result.month if result.month is not None else 'ALL'} "
+        f"success_rate={result.success_rate:.12g} n_days={result.n_days} "
+        f"config_hash={result.config_hash}"
     )
