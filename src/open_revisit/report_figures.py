@@ -106,11 +106,17 @@ def plot_europe_map(
         legend=True,
         legend_kwds={"label": "Effective median revisit (days)", "shrink": 0.72},
     )
+    label_offsets = {
+        "innsbruck": (4, -10),
+        "munich": (-10, 8),
+        "zurich": (-22, 4),
+    }
     for row in points.itertuples(index=False):
+        offset = label_offsets.get(str(row.aoi_id), (3, 3))
         plotted.annotate(
             _label(str(row.aoi_id), names),
             xy=(row.geometry.x, row.geometry.y),
-            xytext=(3, 3),
+            xytext=offset,
             textcoords="offset points",
             fontsize=6.5,
             color=INK,
