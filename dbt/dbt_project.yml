@@ -1,0 +1,28 @@
+name: open_revisit
+version: 1.0.0
+config-version: 2
+
+profile: open_revisit
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+target-path: target
+log-path: logs
+
+models:
+  open_revisit:
+    +materialized: table
+
+vars:
+  data_dir: data
+  config_hash: a16734a8239372a4c4a8583ce233af67b7b9e19f866d7ac5d08cc44bbe19185e
+  start: "2024-01-01"
+  end: "2024-12-31"
+  horizon_days: 60
+  aoi_ids: [berlin, athens, tromso]
+
+on-run-start:
+  - "{{ register_parquet_sources() }}"

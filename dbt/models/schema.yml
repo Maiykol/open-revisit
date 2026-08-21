@@ -1,0 +1,221 @@
+version: 2
+
+models:
+  - name: aoi_gaps
+    description: Fractional-day gaps between adjacent complete observation timestamps.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [nominal, effective]
+      - name: gap_start
+        data_tests: [not_null]
+      - name: gap_end
+        data_tests: [not_null]
+      - name: gap_days
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash, kind, gap_start, gap_end]
+
+  - name: aoi_wait_daily
+    description: Fractional-day wait from each eligible UTC start midnight.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: t0
+        data_tests: [not_null]
+      - name: wait_days
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: "{{ var('horizon_days') }}"
+      - name: censored
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash, t0]
+
+  - name: aoi_survival
+    description: Survival probability P(wait_days > n) for every integer horizon day.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: n_days
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: "{{ var('horizon_days') }}"
+      - name: p_waiting
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash, n_days]
+
+  - name: aoi_monthly
+    description: Twelve monthly within-N reliability rows per AOI.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: month
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 12
+      - name: p_within_5d
+        data_tests: &probability_tests
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: p_within_7d
+        data_tests: *probability_tests
+      - name: p_within_14d
+        data_tests: *probability_tests
+      - name: n_days
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash, month]
+
+  - name: aoi_summary
+    description: One headline metric row per AOI and config hash.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: n_observations
+        data_tests: &nonnegative_tests
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+      - name: n_usable
+        data_tests: *nonnegative_tests
+      - name: usable_rate
+        data_tests: *probability_tests
+      - name: nominal_median_gap_days
+        data_tests: *nonnegative_tests
+      - name: effective_median_gap_days
+        data_tests: *nonnegative_tests
+      - name: effective_p90_gap_days
+        data_tests: *nonnegative_tests
+      - name: longest_outage_days
+        data_tests: *nonnegative_tests
+      - name: n_outages_over_30d
+        data_tests: *nonnegative_tests
+      - name: p_within_3d
+        data_tests: *probability_tests
+      - name: p_within_5d
+        data_tests: *probability_tests
+      - name: p_within_7d
+        data_tests: *probability_tests
+      - name: p_within_14d
+        data_tests: *probability_tests
+      - name: p_within_30d
+        data_tests: *probability_tests
+      - name: best_month
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 12
+      - name: worst_month
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 12
+      - name: p_within_7d_best_month
+        data_tests: *probability_tests
+      - name: p_within_7d_worst_month
+        data_tests: *probability_tests
+      - name: catalog_filter_precision_t20
+        data_tests: *probability_tests
+      - name: catalog_filter_recall_t20
+        data_tests: *probability_tests
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash]
+
+  - name: catalog_filter_eval
+    description: Per-AOI and pooled confusion metrics at thresholds 0, 5, ..., 100.
+    columns:
+      - name: aoi_id
+        data_tests: [not_null]
+      - name: config_hash
+        data_tests: [not_null]
+      - name: threshold
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: tp
+        data_tests: *nonnegative_tests
+      - name: fp
+        data_tests: *nonnegative_tests
+      - name: fn
+        data_tests: *nonnegative_tests
+      - name: tn
+        data_tests: *nonnegative_tests
+      - name: precision
+        data_tests: *probability_tests
+      - name: recall
+        data_tests: *probability_tests
+      - name: f1
+        data_tests: *probability_tests
+      - name: kept_unusable_rate
+        data_tests: *probability_tests
+      - name: discarded_usable_rate
+        data_tests: *probability_tests
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [aoi_id, config_hash, threshold]

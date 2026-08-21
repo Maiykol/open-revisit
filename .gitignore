@@ -17,6 +17,16 @@ __pycache__/
 .coverage
 htmlcov/
 
+# dbt local state and databases. The credential-free dbt/profiles.yml is tracked.
+/.dbt/
+/dbt/logs/
+/dbt/target/
+/dbt/dbt_packages/
+/dbt/.user.yml
+/dbt/profiles.local.yml
+*.duckdb
+*.duckdb.wal
+
 .DS_Store
 .idea/
 .vscode/

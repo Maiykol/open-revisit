@@ -1,4 +1,4 @@
-.PHONY: sync check lint typecheck test test-network
+.PHONY: sync check lint typecheck test test-network dbt
 
 sync:
 	uv sync --frozen
@@ -17,3 +17,6 @@ test:
 
 test-network:
 	uv run pytest -m network --no-cov
+
+dbt:
+	uv run python -m open_revisit.dbt_runner --config config/dev.yaml

@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: parquet
+    description: Parquet system-of-record tables registered as DuckDB views.
+    schema: parquet_sources
+    tables:
+      - name: observations
+        description: One row per AOI, Sentinel-2 datatake, and config hash.
+        columns:
+          - name: aoi_id
+            data_tests: [not_null]
+          - name: datatake_id
+            data_tests: [not_null]
+          - name: config_hash
+            data_tests: [not_null]
+          - name: observed_at
+            data_tests: [not_null]
+          - name: usable
+            data_tests: [not_null]
+          - name: complete
+            data_tests: [not_null]
+        data_tests:
+          - unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [aoi_id, datatake_id, config_hash]

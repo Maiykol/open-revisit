@@ -1,0 +1,9 @@
+open_revisit:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('OPEN_REVISIT_DBT_PATH', 'data/dbt/open_revisit.duckdb') }}"
+      threads: 1
+      settings:
+        TimeZone: UTC
