@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-revisit"
+version = "0.1.0"
+description = "Open-source analytics for satellite image availability"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Michael Hartung" }]
+dependencies = [
+  "duckdb==1.3.2",
+  "geopandas==1.1.1",
+  "matplotlib==3.10.5",
+  "numpy==2.3.2",
+  "pandas==2.3.1",
+  "pyarrow==21.0.0",
+  "pydantic==2.11.7",
+  "pyproj==3.7.1",
+  "pystac-client==0.9.0",
+  "pyyaml==6.0.2",
+  "rasterio==1.4.3",
+  "shapely==2.1.1",
+  "tenacity==9.1.2",
+  "typer==0.16.1",
+]
+
+[project.scripts]
+open-revisit = "open_revisit.cli:app"
+
+[dependency-groups]
+dev = [
+  "mypy==1.17.1",
+  "pytest==8.4.1",
+  "ruff==0.12.10",
+  "types-pyyaml==6.0.12.20250516",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/open_revisit"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+markers = ["network: live tests excluded from CI"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]

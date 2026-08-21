@@ -1,0 +1,19 @@
+.venv/
+data/
+
+# Local planning inputs copied into the repository's governance docs.
+/AGENT_BRIEF.md
+/SPEC.md
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.DS_Store
+.idea/
+.vscode/
